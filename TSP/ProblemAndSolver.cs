@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Drawing;
+using System.Diagnostics;
 
 namespace TSP
 {
@@ -17,8 +18,7 @@ namespace TSP
             /// you are, of course, free to use a different representation if it would be more convenient or efficient 
             /// for your node data structure and search algorithm. 
             /// </summary>
-            public ArrayList 
-                Route;
+            public ArrayList Route;
 
             public TSPSolution(ArrayList iroute)
             {
@@ -27,7 +27,7 @@ namespace TSP
 
 
             /// <summary>
-            ///  compute the cost of the current route.  does not check that the route is complete, btw.
+            ///  compute the cost of the current route.  Does not check that the route is complete, btw.
             /// assumes that the route passes from the last city back to the first city. 
             /// </summary>
             /// <returns></returns>
@@ -241,22 +241,64 @@ namespace TSP
         ///  solve the problem.  This is the entry point for the solver when the run button is clicked
         /// right now it just picks a simple solution. 
         /// </summary>
+        //public void solveProblem()
+        //{            
+        //    int x;
+        //    Route = new ArrayList(); 
+        //    // this is the trivial solution. 
+        //    for (x = 0; x < Cities.Length; x++)
+        //    {
+        //        Route.Add( Cities[Cities.Length - x -1]);
+        //    }
+        //    // call this the best solution so far.  bssf is the route that will be drawn by the Draw method. 
+        //    bssf = new TSPSolution(Route);            
+        //    // update the cost of the tour. 
+        //    Program.MainForm.tbCostOfTour.Text = " " + bssf.costOfRoute();            
+        //    // do a refresh. 
+        //    Program.MainForm.Invalidate();           
+        //}
+
+
+        /// <summary>
+        ///  solve the problem.  This is the entry point for the solver when the run button is clicked
+        /// right now it just picks a simple solution. 
+        /// </summary>
         public void solveProblem()
         {
-            int x;
-            Route = new ArrayList(); 
-            // this is the trivial solution. 
-            for (x = 0; x < Cities.Length; x++)
-            {
-                Route.Add( Cities[Cities.Length - x -1]);
-            }
-            // call this the best solution so far.  bssf is the route that will be drawn by the Draw method. 
-            bssf = new TSPSolution(Route);
+            Stopwatch timer = Stopwatch.StartNew(); //sixty second timer
+            //create state (reduced matrix, bound)
+            //greedily find BSSF
+            //create agenda
+            //populate agenda with best start position (found by BSSF tour)
+            //loop while agenda has something, time remains, and cost is not equal to that found
+            
+            timer.Stop();
+
             // update the cost of the tour. 
             Program.MainForm.tbCostOfTour.Text = " " + bssf.costOfRoute();
+            //set time used
+            Program.MainForm.tbElapsedTime.Text = timer.Elapsed.TotalSeconds.ToString();
             // do a refresh. 
             Program.MainForm.Invalidate();
+
         }
         #endregion
+    }
+
+    class VertexComparer : IComparer<int>
+    {
+        public int Compare(City a, City b)
+        {
+            //DijkstraScissors compareScissors = new DijkstraScissors();
+            //int aWeight = compareScissors.getWeight(a.Point);
+            //int bWeight = compareScissors.getWeight(b.Point);
+
+            //return aWeight - bWeight;
+            return -1;
+        }
+        public int Compare(int a, int b)
+        {
+            return a - b;
+        }
     }
 }
