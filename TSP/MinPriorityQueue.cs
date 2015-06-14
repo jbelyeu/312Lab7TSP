@@ -2,20 +2,19 @@
 using System.Collections.Generic;
 using System.Text;
 
-
-namespace VisualIntelligentScissors
+namespace TSP
 {
     //source: http://www.codeproject.com/Articles/126751/Priority-queue-in-C-with-the-help-of-heap-data-str
-    public class MinPQ<TPriority, TValue>
+    public class MinPriorityQueue<TPriority, TValue>
     {
         private List<KeyValuePair<TPriority, TValue>> baseHeap;
         private IComparer<TPriority> comparer;
 
-        public MinPQ()
+        public MinPriorityQueue()
             : this(Comparer<TPriority>.Default)
         { }
 
-        public MinPQ(IComparer<TPriority> comparer)
+        public MinPriorityQueue(IComparer<TPriority> comparer)
         {
             if (comparer == null)
             {

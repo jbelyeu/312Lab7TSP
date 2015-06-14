@@ -19,6 +19,7 @@ namespace TSP
 
         private double _X;
         private double _Y;
+        private bool visited;
 
         public double X
         {
@@ -30,6 +31,12 @@ namespace TSP
         {
             get { return _Y; }
             set { _Y = value; }
+        }
+
+        public bool Visited
+        {
+            get { return visited; }
+            set { visited = value; }
         }
 
         /// <summary>

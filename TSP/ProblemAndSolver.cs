@@ -9,48 +9,7 @@ namespace TSP
 {
     class ProblemAndSolver
     {
-        private class TSPSolution
-        {
-            /// <summary>
-            /// we use the representation [cityB,cityA,cityC] 
-            /// to mean that cityB is the first city in the solution, cityA is the second, cityC is the third 
-            /// and the edge from cityC to cityB is the final edge in the path.  
-            /// you are, of course, free to use a different representation if it would be more convenient or efficient 
-            /// for your node data structure and search algorithm. 
-            /// </summary>
-            public ArrayList Route;
-
-            public TSPSolution(ArrayList iroute)
-            {
-                Route = new ArrayList(iroute);
-            }
-
-
-            /// <summary>
-            ///  compute the cost of the current route.  Does not check that the route is complete, btw.
-            /// assumes that the route passes from the last city back to the first city. 
-            /// </summary>
-            /// <returns></returns>
-            public double costOfRoute()
-            {
-                // go through each edge in the route and add up the cost. 
-                int x;
-                City here; 
-                double cost = 0D;
-                
-                for (x = 0; x < Route.Count-1; x++)
-                {
-                    here = Route[x] as City;
-                    cost += here.costToGetTo(Route[x + 1] as City);
-                }
-                // go from the last city to the first. 
-                here = Route[Route.Count - 1] as City;
-                cost += here.costToGetTo(Route[0] as City);
-                return cost; 
-            }
-        }
-
-        #region private members
+               #region private members
         private const int DEFAULT_SIZE = 25;
         
         private const int CITY_ICON_SIZE = 5;
@@ -66,7 +25,28 @@ namespace TSP
         /// <summary>
         /// best solution so far. 
         /// </summary>
-        private TSPSolution bssf; 
+        private TSPSolution bssf;
+
+        /// <summary>
+        /// optimal starting point for B&B, found by the greedy algorithm
+        /// </summary>
+        private City startCity;
+
+        /// <summary>
+        /// Holds the bound from the reduced cost matrix, lower bound
+        /// </summary>
+        private double classBound;
+
+        /// <summary>
+        /// holds the bound from the reduced cost matrix of the bssf, upper bound
+        /// </summary>
+        private double bssfBound;
+
+        /// <summary>
+        /// agenda of childen to expand
+        /// </summary>
+        private MinPriorityQueue<int, City> agenda;
+
 
         /// <summary>
         /// how to color various things. 
@@ -74,6 +54,9 @@ namespace TSP
         private Brush cityBrushStartStyle;
         private Brush cityBrushStyle;
         private Pen routePenStyle;
+
+        private const int TIMELIMIT = 60;
+        private const int DEBUGTIMELIMIT = Int16.MaxValue;
 
 
         /// <summary>
@@ -242,63 +225,223 @@ namespace TSP
         /// right now it just picks a simple solution. 
         /// </summary>
         //public void solveProblem()
-        //{            
+        //{
         //    int x;
-        //    Route = new ArrayList(); 
+        //    Route = new ArrayList();
         //    // this is the trivial solution. 
         //    for (x = 0; x < Cities.Length; x++)
         //    {
-        //        Route.Add( Cities[Cities.Length - x -1]);
+        //        Route.Add(Cities[Cities.Length - x - 1]);
         //    }
         //    // call this the best solution so far.  bssf is the route that will be drawn by the Draw method. 
-        //    bssf = new TSPSolution(Route);            
+        //    bssf = new TSPSolution(Route);
         //    // update the cost of the tour. 
-        //    Program.MainForm.tbCostOfTour.Text = " " + bssf.costOfRoute();            
+        //    Program.MainForm.tbCostOfTour.Text = " " + bssf.costOfRoute();
         //    // do a refresh. 
-        //    Program.MainForm.Invalidate();           
+        //    Program.MainForm.Invalidate();
         //}
 
 
         /// <summary>
         ///  solve the problem.  This is the entry point for the solver when the run button is clicked
-        /// right now it just picks a simple solution. 
         /// </summary>
         public void solveProblem()
         {
             Stopwatch timer = Stopwatch.StartNew(); //sixty second timer
-            //create state (reduced matrix, bound)
+            //create state 
+            State initState = new State();
+            //set reduced matrix and bound for the state
+            initState.buildMatrix(this.Cities); //TODO: add end to bound
+
             //greedily find BSSF
-            //create agenda
-            //populate agenda with best start position (found by BSSF tour)
-            //loop while agenda has something, time remains, and cost is not equal to that found
-            
+            int startIndex = this.getBSSF(initState.ReducedMatrix, initState.LowerBound); //TODO: add end to bssf bound
+            //create comparer and agenda
+            VertexComparer comparer = new VertexComparer();
+            MinPriorityQueue<Pair, State> agenda = new MinPriorityQueue<Pair, State>(comparer);
+
+            //populate agenda with best start position (found by BSSF tour, first index in chosen bssf)
+            initState.RouteSoFar.Route.Add(this.Cities[startIndex]);
+            initState.VisitedCityIndices.Add(startIndex);
+
+            Pair priority = new Pair(0, initState.LowerBound);
+            agenda.enqueue(priority, initState);
+
+            //loop while agenda has something, time remains, and cost of the cheapest in the agenda is not equal to that found already
+            while (!agenda.isEmpty && timer.Elapsed.TotalSeconds < TIMELIMIT && bssfBound != agenda.seeNextVal().LowerBound)
+            {
+                KeyValuePair<Pair, State> next = agenda.seeNext();
+                agenda.dequeue(next.Key, next.Value);
+
+                //this means a route based on the state next could be better than current BSSF
+                if (next.Value.LowerBound < this.bssfBound) 
+                {
+                    //generate a list of all successor state to this next state
+                    List<State> children = this.getSuccessors(next.Value);
+
+                    //for each child state, chech potential
+                    foreach (State child in children)
+                    {
+                        if (timer.Elapsed.TotalSeconds >= TIMELIMIT)
+                        {
+                            break; //out of time
+                        }
+
+                        if (child.LowerBound < this.bssfBound )
+                        {
+                            //if childStateroutesoFar includes all cities
+                            if (child.RouteSoFar.Route.Count == this.Cities.Length)
+                            {
+                                //bssf.Route = child.RouteSoFar.Route;
+                                //this.bssfBound = child.LowerBound;
+                            }
+                            else
+                            {
+                                Pair childPriority = new Pair(child.RouteSoFar.Route.Count, child.LowerBound);
+                                agenda.enqueue(childPriority, child);
+                            }                            
+                        }
+                    }            
+                }
+            }
+
             timer.Stop();
 
             // update the cost of the tour. 
-            Program.MainForm.tbCostOfTour.Text = " " + bssf.costOfRoute();
+            Program.MainForm.tbCostOfTour.Text = " " + this.costOfBssf();
             //set time used
             Program.MainForm.tbElapsedTime.Text = timer.Elapsed.TotalSeconds.ToString();
             // do a refresh. 
             Program.MainForm.Invalidate();
-
         }
         #endregion
+
+        //greedily tours the set of cities from every starting point and finds the cheapest path
+        private int getBSSF(Double[,] matrix, double lowerBound)
+        {
+            double localBound = Double.PositiveInfinity;
+            int startIndex = -1;
+
+            //initialize class var bssf, create main bound variable
+            //For all cities in the Cities list (to compute the BSSF for all possible starting points)
+            for (int i = 0; i < this.Cities.Length; ++i)
+            {
+                //create temp bound variable and temp array or list of cities for bssf
+                ArrayList tempbssf = new ArrayList();
+                Dictionary<int, bool> visitedCities = new Dictionary<int, bool>();
+                Double tempBound = 0;
+                int lastIndex = -1;
+
+                tempBound = this.getBSSFFromCity(matrix, tempbssf, tempBound, visitedCities, i, ref lastIndex);
+                tempBound += lowerBound; //should get the cost of going from the last city to the first again
+                if (tempBound < localBound)
+                {
+                    if (localBound == 0)
+                    {
+                        throw new Exception("Invalid tempBound");
+                    }
+
+                    localBound = tempBound;
+                    this.bssf = new TSPSolution(tempbssf);
+                    startIndex = i;
+                }
+            }
+            this.bssfBound = localBound;
+            
+            //Add closest city to bssf, mark as visited, add cost to bound.
+            //When all cities are in the temp bssf list, stop. Check the bound against the main bound. If smaller, overwrite the main bound with the lesser bound
+            //and the bssf with the temp bssf.
+            //When done, the first city in the bssf should be the starting point for B&B and the bound should be tightish
+            return startIndex;
+        }
+
+        /// <summary>
+        ///  saves the BSSF by ref into tempbssf, bound as well. i says where to find initial city
+        /// </summary>
+        /// <param name="tempbssf"></param>
+        /// <param name="tempBound"></param>
+        /// <param name="i"></param>
+        private double getBSSFFromCity(Double[,] reducedMatrix, ArrayList tempbssf, Double tempBound, Dictionary<int, bool> visitedCities, int i, ref int lastIndex)
+        {
+            //start at city i, mark city as visited
+            visitedCities[i] = true;
+            lastIndex = i;
+
+            //add to initial bssf
+            tempbssf.Add(Cities[i]);
+
+            //loop back through cities and find closest city to i that has not been visited.
+            double minDist = Double.PositiveInfinity;
+            int nextCity = -1;
+
+            for (int j = 0; j < this.Cities.Length; ++j)
+            {
+                //if the index is there already, we've been there before
+                if (visitedCities.ContainsKey(j)) 
+                {
+                    continue;
+                }
+
+                if (reducedMatrix[i, j] < minDist) //reduced cost of going from city i to city j
+                {
+                    nextCity = j;
+                    minDist = reducedMatrix[i, j];
+                }
+
+                if (minDist <= 0) //this would have to be the smallest distance possible
+                {
+                    break;
+                }
+            }
+
+            if (minDist != Double.PositiveInfinity) //means we have not visited all of the cities
+            {
+                tempBound = getBSSFFromCity(reducedMatrix, tempbssf, tempBound + minDist, visitedCities, nextCity, ref lastIndex);
+            }
+            
+            return tempBound; //we're done if we get past previous check
+        }
+
+        private List<State> getSuccessors(State parent)
+        {
+            //get last city in the route so far. Route should never be empty when this is called
+            List<State> successors = new List<State>();
+
+            for (int i = 0; i < this.Cities.Length; ++i )
+            {
+                //if this i is not in the state's visited set, it is fair game
+                if (! parent.VisitedCityIndices.Contains(i))
+                {
+                    State newState = new State();
+                    for (int j = 0; j < parent.RouteSoFar.Route.Count; ++j)
+                    {
+                        newState.RouteSoFar.Route.Add(parent.RouteSoFar.Route[j]); //slightly deeper copy than just copying the route
+                    }
+                    
+                    newState.RouteSoFar.Route.Add(this.Cities[i]); //expand to the next city
+                    newState.VisitedCityIndices.Add(i); //mark it visited
+
+                    newState.buildMatrix(this.Cities);
+                    successors.Add(newState);
+                }
+            }
+            return successors;
+        }
     }
 
-    class VertexComparer : IComparer<int>
+    class VertexComparer : IComparer<Pair>
     {
-        public int Compare(City a, City b)
+        public int Compare(Pair a, Pair b)
         {
-            //DijkstraScissors compareScissors = new DijkstraScissors();
-            //int aWeight = compareScissors.getWeight(a.Point);
-            //int bWeight = compareScissors.getWeight(b.Point);
-
-            //return aWeight - bWeight;
-            return -1;
-        }
-        public int Compare(int a, int b)
-        {
-            return a - b;
+            //depth has higher prority than bound
+            //we want the larger depth value, though
+            if (a.Depth != b.Depth)
+            {
+                return (int)((b.Depth - a.Depth) + 0.5); //swapped order to make deeper depth a negative value
+            }
+            else
+            {
+                return (int)((a.Bound - b.Bound) + 0.5);
+            }
         }
     }
 }
